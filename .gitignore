@@ -1,0 +1,7 @@
+configs/config.php
+cache/*
+*.aww
+*.tpl.php
+.idea/*
+setup2/*
+.DS_Store
