@@ -5,3 +5,6 @@ cache/*
 .idea/*
 setup2/*
 .DS_Store
+desktop.ini
+*.rej
+*.orig
