@@ -277,8 +277,8 @@ index 5118b58..2c35b49 100755
          killer->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HIT_DEALT, damage);
 @@ -10057,6 +10066,11 @@ int32 Unit::DealHeal(Unit* victim, uint32 addhealth)
      {
-         player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_TOTAL_HEALING_RECEIVED, gain);
-         player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEALING_RECEIVED, addhealth);
+         player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_TOTAL_HEALING_RECEIVED, gain);
+         player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_HEALING_RECEIVED, addhealth);
 +		/** World of Warcraft Armory **/
 +        if (sWorld->getBoolConfig(CONFIG_ARMORY_ENABLE))
 +            if (Battleground *bgV = victim->ToPlayer()->GetBattleground())
