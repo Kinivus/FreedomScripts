@@ -1,42 +1,3 @@
-From 5ecfc7691301259abdee948aff712acc6693d450 Mon Sep 17 00:00:00 2001
-From: LordPsyan <realmsofwarcraft@gmail.com>
-Date: Sat, 1 Sep 2012 09:40:56 -0500
-Subject: [PATCH] 2012-09-01_AHBot-with-glyphs-VIP-Account
-
----
- doc/AuctionHouseBot.txt                            |  235 +++
- sql/VIPAccounts/auth_VIPAccount.sql                |    8 +
- sql/tools/setup_ahbot.sql                          |   72 +
- src/server/authserver/Server/AuthSocket.cpp        |    1 +
- .../AuctionHouseBot/AuctionHouseBot.cpp            | 2002 ++++++++++++++++++++
- .../AuctionHouse/AuctionHouseBot/AuctionHouseBot.h | 1257 ++++++++++++
- src/server/game/AuctionHouse/AuctionHouseMgr.cpp   |   11 +-
- src/server/game/AuctionHouse/AuctionHouseMgr.h     |    2 +
- src/server/game/CMakeLists.txt                     |    3 +
- src/server/game/Entities/Player/Player.cpp         |    6 +-
- src/server/game/Handlers/AuctionHouseHandler.cpp   |    1 +
- src/server/game/Mails/Mail.cpp                     |    8 +
- src/server/game/Miscellaneous/Formulas.h           |    4 +-
- src/server/game/Scripting/ScriptLoader.cpp         |    2 +
- src/server/game/Server/WorldSession.cpp            |    4 +-
- src/server/game/Server/WorldSession.h              |    4 +-
- src/server/game/Server/WorldSocket.cpp             |   13 +-
- src/server/game/World/World.cpp                    |    8 +
- src/server/game/World/World.h                      |    3 +
- src/server/scripts/CMakeLists.txt                  |    1 +
- src/server/scripts/Commands/CMakeLists.txt         |    1 +
- src/server/scripts/Commands/cs_ah_bot.cpp          |  482 +++++
- .../Database/Implementation/LoginDatabase.cpp      |    1 +
- .../shared/Database/Implementation/LoginDatabase.h |    1 +
- src/server/worldserver/worldserver.conf.dist       |  294 +++-
- 25 files changed, 4411 insertions(+), 13 deletions(-)
- create mode 100644 doc/AuctionHouseBot.txt
- create mode 100644 sql/VIPAccounts/auth_VIPAccount.sql
- create mode 100644 sql/tools/setup_ahbot.sql
- create mode 100644 src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.cpp
- create mode 100644 src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.h
- create mode 100644 src/server/scripts/Commands/cs_ah_bot.cpp
-
 diff --git a/doc/AuctionHouseBot.txt b/doc/AuctionHouseBot.txt
 new file mode 100644
 index 0000000..8170bd2
@@ -278,21 +239,6 @@ index 0000000..8170bd2
 +AHBot Originally made by Chris K. Currently maintained by Paradox
 +Much thanks to Chris K, grether and Dolomit6!
 +AHBot Now includes AHBuyer created by Kerbe as a derivative of AHBot, and later modified by Paradox
-diff --git a/sql/VIPAccounts/auth_VIPAccount.sql b/sql/VIPAccounts/auth_VIPAccount.sql
-new file mode 100644
-index 0000000..df317ed
---- /dev/null
-+++ b/sql/VIPAccounts/auth_VIPAccount.sql
-@@ -0,0 +1,8 @@
-+CREATE TABLE IF NOT EXISTS `account_premium` (
-+  `id` int(11) NOT NULL default '0' COMMENT 'Account id',
-+  `setdate` bigint(40) NOT NULL default '0',
-+  `unsetdate` bigint(40) NOT NULL default '0',
-+  `premium_type` tinyint(4) unsigned NOT NULL default '1',
-+  `active` tinyint(4) NOT NULL default '1',
-+  PRIMARY KEY  (`id`,`setdate`)
-+) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='Premium Accounts';
-\ No newline at end of file
 diff --git a/sql/tools/setup_ahbot.sql b/sql/tools/setup_ahbot.sql
 new file mode 100644
 index 0000000..767a01e
@@ -371,24 +317,12 @@ index 0000000..767a01e
 +(2,'Alliance',250,250,0,27,12,10,1,0,0,0,10,30,8,2,0,0,100,150,150,250,800,1400,1250,1750,2250,4550,3250,5550,5250,6550,70,100,70,100,80,100,75,100,80,100,80,100,80,100,0,0,3,2,1,1,1,1,3,5,12,15,20,22,1,1),
 +(6,'Horde',250,250,0,27,12,10,1,0,0,0,10,30,8,2,0,0,100,150,150,250,800,1400,1250,1750,2250,4550,3250,5550,5250,6550,70,100,70,100,80,100,75,100,80,100,80,100,80,100,0,0,3,2,1,1,1,1,3,5,12,15,20,22,1,1),
 +(7,'Neutral',250,250,0,27,12,10,1,0,0,0,10,30,8,2,0,0,100,150,150,250,800,1400,1250,1750,2250,4550,3250,5550,5250,6550,70,100,70,100,80,100,75,100,80,100,80,100,80,100,0,0,3,2,1,1,1,1,3,5,12,15,20,22,1,1);
-diff --git a/src/server/authserver/Server/AuthSocket.cpp b/src/server/authserver/Server/AuthSocket.cpp
-index d55d2cf..1fe2b19 100755
---- a/src/server/authserver/Server/AuthSocket.cpp
-+++ b/src/server/authserver/Server/AuthSocket.cpp
-@@ -401,6 +401,7 @@ bool AuthSocket::_HandleLogonChallenge()
-             if (!locked)
-             {
-                 //set expired bans to inactive
-+                LoginDatabase.Execute(LoginDatabase.GetPreparedStatement(LOGIN_UPD_ACCOUNT_PREMIUM));
-                 LoginDatabase.Execute(LoginDatabase.GetPreparedStatement(LOGIN_UPD_EXPIRED_ACCOUNT_BANS));
- 
-                 // If the account is banned, reject the logon attempt
 diff --git a/src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.cpp b/src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.cpp
 new file mode 100644
-index 0000000..01a49a4
+index 0000000..411a146
 --- /dev/null
 +++ b/src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.cpp
-@@ -0,0 +1,2002 @@
+@@ -0,0 +1,1891 @@
 +/*
 + * Copyright (C) 2008-2010 Trinity <http://www.trinitycore.org/>
 + * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
@@ -415,7 +349,6 @@ index 0000000..01a49a4
 +
 +using namespace std;
 +vector<uint32> npcItems;
-+vector<uint32> glyphItemsBin;
 +vector<uint32> lootItems;
 +vector<uint32> greyTradeGoodsBin;
 +vector<uint32> whiteTradeGoodsBin;
@@ -492,16 +425,6 @@ index 0000000..01a49a4
 +    DisableItemsAboveReqSkillRank = 0;
 +    DisableTGsBelowReqSkillRank = 0;
 +    DisableTGsAboveReqSkillRank = 0;
-+	//glyphs patch
-+	SellGlyphs = false;
-+	GlyphsCount = 0;
-+	DisableGlyphBelowLevel = 0;
-+	DisableGlyphAboveLevel = 0;
-+	GlyphBuyOutPriceMin = 0;
-+	GlyphBuyOutPriceMax = 0;
-+	GlyphBidPriceMin = 0;
-+	GlyphBidPriceMax = 0;
-+	// <- end glyphs patch
 +
 +    //End Filters
 +
@@ -520,8 +443,6 @@ index 0000000..01a49a4
 +
 +void AuctionHouseBot::addNewAuctions(Player *AHBplayer, AHBConfig *config)
 +{
-+	bool glyphMode = false;
-+
 +    if (!AHBSeller)
 +    {
 +        if (debug_Out) sLog->outInfo(LOG_FILTER_GENERAL, "AHSeller: Disabled");
@@ -554,17 +475,9 @@ index 0000000..01a49a4
 +
 +    if (auctions >= minItems)
 +    {
-+        glyphMode = true;
 +        //if (debug_Out) sLog->outError(LOG_FILTER_GENERAL, "AHSeller: Auctions above minimum");
 +        return;
 +    }
-+
-+	if(SellGlyphs)
-+	{
-+		if(GlyphsCount <= 0)
-+			GlyphsCount = 400;
-+    if (auctions >= minItems)
-+        glyphMode = true;
 +
 +    if (auctions >= maxItems)
 +    {
@@ -576,34 +489,6 @@ index 0000000..01a49a4
 +        items = ItemsPerCycle;
 +    else
 +        items = (maxItems - auctions);
-+		if(auctions >= (maxItems + GlyphsCount))
-+			return;
-+
-+		if (((maxItems + GlyphsCount) - auctions) >= ItemsPerCycle)
-+			items = ItemsPerCycle;
-+		else
-+			items = ((maxItems + GlyphsCount) - auctions);
-+	}
-+	else
-+	{
-+
-+    if (auctions >= minItems)
-+        {
-+        //if (debug_Out) sLog.outString("AHSeller: Auctions above minimum");
-+            return;
-+        }
-+
-+		if (auctions >= maxItems)
-+		{
-+			//if (debug_Out) sLog.outString("AHSeller: Auctions at or above maximum");
-+			return;
-+		}
-+
-+		if ((maxItems - auctions) >= ItemsPerCycle)
-+			items = ItemsPerCycle;
-+		else
-+			items = (maxItems - auctions);
-+	}
 +
 +    if (debug_Out) sLog->outInfo(LOG_FILTER_GENERAL, "AHSeller: Adding %u Auctions", items);
 +
@@ -675,8 +560,6 @@ index 0000000..01a49a4
 +        {
 +            ++loopbreaker;
 +            uint32 choice = urand(0, 13);
-+			if(glyphMode)
-+				choice = 14;
 +            itemColor = choice;
 +            switch (choice)
 +            {
@@ -778,13 +661,6 @@ index 0000000..01a49a4
 +                    else continue;
 +                    break;
 +                }
-+			case 14:
-+                {
-+					if (glyphItemsBin.size() > 0)
-+						itemID = glyphItemsBin[urand(0, glyphItemsBin.size() - 1)];
-+					else continue;
-+                    break;
-+                }
 +            default:
 +                {
 +                    if (debug_Out) sLog->outError(LOG_FILTER_GENERAL, "AHSeller: itemID Switch - Default Reached");
@@ -833,8 +709,6 @@ index 0000000..01a49a4
 +
 +            if (prototype->Quality <= AHB_MAX_QUALITY)
 +            {
-+				if(!glyphMode)
-+				{
 +                if (config->GetMaxStack(prototype->Quality) > 1 && item->GetMaxStackCount() > 1)
 +                    stackCount = urand(1, minValue(item->GetMaxStackCount(), config->GetMaxStack(prototype->Quality)));
 +                else if (config->GetMaxStack(prototype->Quality) == 0 && item->GetMaxStackCount() > 1)
@@ -845,15 +719,6 @@ index 0000000..01a49a4
 +                buyoutPrice /= 100;
 +                bidPrice = buyoutPrice * urand(config->GetMinBidPrice(prototype->Quality), config->GetMaxBidPrice(prototype->Quality));
 +                bidPrice /= 100;
-+				}
-+				else
-+				{
-+					buyoutPrice = urand(GlyphBuyOutPriceMin, GlyphBuyOutPriceMax);
-+					bidPrice = urand(GlyphBidPriceMin, GlyphBidPriceMax);
-+					if(buyoutPrice<bidPrice)
-+						bidPrice = buyoutPrice - 1;
-+					stackCount = 1;
-+				}
 +            }
 +            else
 +            {
@@ -1173,7 +1038,7 @@ index 0000000..01a49a4
 +    if ((!AHBSeller) && (!AHBBuyer))
 +        return;
 +
-+    WorldSession _session(AHBplayerAccount, NULL, SEC_PLAYER, false, true, 0, LOCALE_enUS, 0, 0);
++    WorldSession _session(AHBplayerAccount, NULL, SEC_PLAYER, true, 0, LOCALE_enUS, 0, 0);
 +    Player _AHBplayer(&_session);
 +    _AHBplayer.Initialize(AHBplayerGUID);
 +    sObjectAccessor->AddObject(&_AHBplayer);
@@ -1287,14 +1152,7 @@ index 0000000..01a49a4
 +    DisableItemsAboveReqSkillRank = ConfigMgr::GetIntDefault("AuctionHouseBot.DisableItemsAboveReqSkillRank", 0);
 +    DisableTGsBelowReqSkillRank = ConfigMgr::GetIntDefault("AuctionHouseBot.DisableTGsBelowReqSkillRank", 0);
 +    DisableTGsAboveReqSkillRank = ConfigMgr::GetIntDefault("AuctionHouseBot.DisableTGsAboveReqSkillRank", 0);
-+	SellGlyphs = ConfigMgr::GetBoolDefault("AuctionHouseBot.SellGlyphs", false);
-+	GlyphsCount = ConfigMgr::GetIntDefault("AuctionHouseBot.GlyphsCount", 0);
-+	DisableGlyphBelowLevel = ConfigMgr::GetIntDefault("AuctionHouseBot.DisableGlyphBelowLevel", 0);
-+	DisableGlyphAboveLevel = ConfigMgr::GetIntDefault("AuctionHouseBot.DisableGlyphAboveLevel", 0);
-+	GlyphBuyOutPriceMin = ConfigMgr::GetIntDefault("AuctionHouseBot.GlyphBuyOutPriceMin", 0);
-+	GlyphBuyOutPriceMax = ConfigMgr::GetIntDefault("AuctionHouseBot.GlyphBuyOutPriceMax", 0);
-+	GlyphBidPriceMin = ConfigMgr::GetIntDefault("AuctionHouseBot.GlyphBidPriceMin", 0);
-+	GlyphBidPriceMax = ConfigMgr::GetIntDefault("AuctionHouseBot.GlyphBidPriceMax", 0);
++
 +    //End Filters
 +    if (!sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_INTERACTION_AUCTION))
 +    {
@@ -1336,40 +1194,6 @@ index 0000000..01a49a4
 +            if (debug_Out) sLog->outError(LOG_FILTER_GENERAL, "AuctionHouseBot: \"%s\" failed", npcQuery);
 +        }
 +
-+		if(SellGlyphs)
-+		{
-+			if(DisableGlyphBelowLevel > 80)
-+				DisableGlyphBelowLevel = 0;
-+			if(DisableGlyphAboveLevel < DisableGlyphBelowLevel)
-+				DisableGlyphAboveLevel = DisableGlyphBelowLevel;
-+			if(DisableGlyphAboveLevel == 0)
-+				DisableGlyphAboveLevel = 85;
-+
-+			if(GlyphBidPriceMin <= 0)
-+				GlyphBidPriceMin = 8000;
-+			if(GlyphBidPriceMin > GlyphBidPriceMax)
-+				GlyphBidPriceMax = GlyphBidPriceMin;
-+			if(GlyphBuyOutPriceMin <= 0)
-+				GlyphBuyOutPriceMin = 10000;
-+			if(GlyphBuyOutPriceMin > GlyphBuyOutPriceMax)
-+				GlyphBuyOutPriceMax = GlyphBuyOutPriceMin;
-+
-+
-+			results = WorldDatabase.PQuery("SELECT entry FROM item_template WHERE class = 16 AND RequiredLevel >= %u AND RequiredLevel <= %u", DisableGlyphBelowLevel, DisableGlyphAboveLevel);
-+			if (results != NULL)
-+			{
-+				do
-+				{
-+					Field* fields = results->Fetch();
-+					glyphItemsBin.push_back(fields[0].GetUInt32());
-+
-+				} while (results->NextRow());
-+			}
-+			else
-+			{
-+				//if (debug_Out) sLog->outError(LOG_FILTER_GENERAL, "AuctionHouseBot: query glyphs failed");
-+			}
-+		}
 +        char lootQuery[] = "SELECT item FROM creature_loot_template UNION "
 +            "SELECT item FROM reference_loot_template UNION "
 +            "SELECT item FROM disenchant_loot_template UNION "
@@ -1884,7 +1708,6 @@ index 0000000..01a49a4
 +        sLog->outInfo(LOG_FILTER_SERVER_LOADING, "loaded %u purple items", uint32(purpleItemsBin.size()));
 +        sLog->outInfo(LOG_FILTER_SERVER_LOADING, "loaded %u orange items", uint32(orangeItemsBin.size()));
 +        sLog->outInfo(LOG_FILTER_SERVER_LOADING, "loaded %u yellow items", uint32(yellowItemsBin.size()));
-+        sLog->outInfo(LOG_FILTER_SERVER_LOADING, "loaded %u glyph items", uint32(glyphItemsBin.size()));
 +    }
 +    sLog->outInfo(LOG_FILTER_SERVER_LOADING, "AuctionHouseBot and AuctionHouseBuyer have been loaded.");
 +}
@@ -2393,10 +2216,10 @@ index 0000000..01a49a4
 +}
 diff --git a/src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.h b/src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.h
 new file mode 100644
-index 0000000..648a44d
+index 0000000..39af36e
 --- /dev/null
 +++ b/src/server/game/AuctionHouse/AuctionHouseBot/AuctionHouseBot.h
-@@ -0,0 +1,1257 @@
+@@ -0,0 +1,1248 @@
 +/*
 + * Copyright (C) 2008-2010 Trinity <http://www.trinitycore.org/>
 + * Copyright (C) 2005-2009 MaNGOS <http://getmangos.com/>
@@ -2445,7 +2268,6 @@ index 0000000..648a44d
 +#define AHB_PURPLE_I    11
 +#define AHB_ORANGE_I    12
 +#define AHB_YELLOW_I    13
-+#define AHB_GLYPH		14
 +
 +class AHBConfig
 +{
@@ -3614,14 +3436,6 @@ index 0000000..648a44d
 +    uint32 DisableTGsAboveReqSkillRank;
 +
 +    std::set<uint32> DisableItemStore;
-+	bool SellGlyphs;
-+	uint32 GlyphsCount;
-+	uint32 DisableGlyphBelowLevel;
-+	uint32 DisableGlyphAboveLevel;
-+	uint32 GlyphBuyOutPriceMin;
-+	uint32 GlyphBuyOutPriceMax;
-+	uint32 GlyphBidPriceMin;
-+	uint32 GlyphBidPriceMax;
 +
 +    //End Filters
 +
@@ -3665,8 +3479,8 @@ index 84b5513..43cf984 100644
 -        if (owner)
 +        if (owner && owner->GetGUIDLow() != auctionbot.GetAHBplayerGUID())
          {
-             owner->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_EARNED_BY_AUCTIONS, profit);
-             owner->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_AUCTION_SOLD, auction->bid);
+             owner->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_EARNED_BY_AUCTIONS, profit);
+             owner->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_HIGHEST_AUCTION_SOLD, auction->bid);
 @@ -205,7 +205,7 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry* auction, SQLTransacti
      // owner exist
      if (owner || owner_accId)
@@ -3741,32 +3555,8 @@ index 68ae2d8..7405e3e 100644
    ${CMAKE_CURRENT_SOURCE_DIR}/Battlefield
    ${CMAKE_CURRENT_SOURCE_DIR}/Battlefield/Zones
    ${CMAKE_CURRENT_SOURCE_DIR}/Battlegrounds
-diff --git a/src/server/game/Entities/Player/Player.cpp b/src/server/game/Entities/Player/Player.cpp
-index 65f6588..34f2275 100755
---- a/src/server/game/Entities/Player/Player.cpp
-+++ b/src/server/game/Entities/Player/Player.cpp
-@@ -6860,7 +6860,8 @@ void Player::CheckAreaExploreAndOutdoor()
-                 {
-                     XP = uint32(sObjectMgr->GetBaseXP(areaEntry->area_level)*sWorld->getRate(RATE_XP_EXPLORE));
-                 }
--
-+                if(GetSession()->IsPremium())
-+                XP *= sWorld->getRate(RATE_XP_EXPLORE_PREMIUM);
-                 GiveXP(XP, NULL);
-                 SendExplorationExperience(area, XP);
-             }
-@@ -15107,6 +15108,9 @@ void Player::RewardQuest(Quest const* quest, uint32 reward, Object* questGiver,
-         AddPctN(XP, (*i)->GetAmount());
- 
-     int32 moneyRew = 0;
-+    if (GetSession()->IsPremium())
-+        XP *= sWorld->getRate(RATE_XP_QUEST_PREMIUM);
-+
-     if (getLevel() < sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL))
-         GiveXP(XP, NULL);
-     else
 diff --git a/src/server/game/Handlers/AuctionHouseHandler.cpp b/src/server/game/Handlers/AuctionHouseHandler.cpp
-index 2ebcbce..931c65d 100755
+index 10a1305..768d19d 100755
 --- a/src/server/game/Handlers/AuctionHouseHandler.cpp
 +++ b/src/server/game/Handlers/AuctionHouseHandler.cpp
 @@ -22,6 +22,7 @@
@@ -3803,23 +3593,8 @@ index 929a1d8..99ef380 100755
      time_t deliver_time = time(NULL) + deliver_delay;
  
      //expire time if COD 3 days, if no COD 30 days, if auction sale pending 1 hour
-diff --git a/src/server/game/Miscellaneous/Formulas.h b/src/server/game/Miscellaneous/Formulas.h
-index dac5b1e..dc95c30 100755
---- a/src/server/game/Miscellaneous/Formulas.h
-+++ b/src/server/game/Miscellaneous/Formulas.h
-@@ -177,8 +177,8 @@ namespace Trinity
-                     else
-                         gain *= 2;
-                 }
--
--                gain = uint32(gain * sWorld->getRate(RATE_XP_KILL));
-+                float premium_rate = player->GetSession()->IsPremium() ? sWorld->getRate(RATE_XP_KILL_PREMIUM) : 1.0f;
-+                gain = uint32(gain * sWorld->getRate(RATE_XP_KILL)*premium_rate);
-             }
- 
-             sScriptMgr->OnGainCalculation(gain, player, u);
 diff --git a/src/server/game/Scripting/ScriptLoader.cpp b/src/server/game/Scripting/ScriptLoader.cpp
-index 1848250..496ea56 100755
+index 9d98354..f265642 100755
 --- a/src/server/game/Scripting/ScriptLoader.cpp
 +++ b/src/server/game/Scripting/ScriptLoader.cpp
 @@ -46,6 +46,7 @@ void AddSC_SmartSCripts();
@@ -3830,7 +3605,7 @@ index 1848250..496ea56 100755
  void AddSC_ban_commandscript();
  void AddSC_bf_commandscript();
  void AddSC_cast_commandscript();
-@@ -663,6 +664,7 @@ void AddCommandScripts()
+@@ -662,6 +663,7 @@ void AddCommandScripts()
  {
      AddSC_account_commandscript();
      AddSC_achievement_commandscript();
@@ -3838,91 +3613,8 @@ index 1848250..496ea56 100755
      AddSC_ban_commandscript();
      AddSC_bf_commandscript();
      AddSC_cast_commandscript();
-diff --git a/src/server/game/Server/WorldSession.cpp b/src/server/game/Server/WorldSession.cpp
-index 6a2c7e6..5b08127 100755
---- a/src/server/game/Server/WorldSession.cpp
-+++ b/src/server/game/Server/WorldSession.cpp
-@@ -88,9 +88,9 @@ bool WorldSessionFilter::Process(WorldPacket* packet)
- }
- 
- /// WorldSession constructor
--WorldSession::WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter, bool isARecruiter):
-+WorldSession::WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, bool ispremium, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter, bool isARecruiter):
- m_muteTime(mute_time), m_timeOutTime(0), _player(NULL), m_Socket(sock),
--_security(sec), _accountId(id), m_expansion(expansion), _logoutTime(0),
-+_security(sec), _ispremium(ispremium), _accountId(id), m_expansion(expansion), _logoutTime(0),
- m_inQueue(false), m_playerLoading(false), m_playerLogout(false),
- m_playerRecentlyLogout(false), m_playerSave(false),
- m_sessionDbcLocale(sWorld->GetAvailableDbcLocale(locale)),
-diff --git a/src/server/game/Server/WorldSession.h b/src/server/game/Server/WorldSession.h
-index 0aa14eb..0035bcb 100755
---- a/src/server/game/Server/WorldSession.h
-+++ b/src/server/game/Server/WorldSession.h
-@@ -225,7 +225,7 @@ class CharacterCreateInfo
- class WorldSession
- {
-     public:
--        WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter, bool isARecruiter);
-+        WorldSession(uint32 id, WorldSocket* sock, AccountTypes sec, bool ispremium, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter, bool isARecruiter);
-         ~WorldSession();
- 
-         bool PlayerLoading() const { return m_playerLoading; }
-@@ -252,6 +252,7 @@ class WorldSession
-         void SendClientCacheVersion(uint32 version);
- 
-         AccountTypes GetSecurity() const { return _security; }
-+        bool IsPremium() const { return _ispremium; }
-         uint32 GetAccountId() const { return _accountId; }
-         Player* GetPlayer() const { return _player; }
-         std::string GetPlayerName(bool simple = true) const;
-@@ -974,6 +975,7 @@ class WorldSession
-         AccountTypes _security;
-         uint32 _accountId;
-         uint8 m_expansion;
-+        bool _ispremium;
- 
-         typedef std::list<AddonInfo> AddonsList;
- 
-diff --git a/src/server/game/Server/WorldSocket.cpp b/src/server/game/Server/WorldSocket.cpp
-index 92455f8..47cd508 100755
---- a/src/server/game/Server/WorldSocket.cpp
-+++ b/src/server/game/Server/WorldSocket.cpp
-@@ -739,6 +739,7 @@ int WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
-     //uint8 expansion = 0;
-     LocaleConstant locale;
-     std::string account;
-+    bool isPremium = false;
-     SHA1Hash sha;
-     BigNumber v, s, g, N;
-     WorldPacket packet, SendAddonPacked;
-@@ -891,6 +892,16 @@ int WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
-         return -1;
-     }
- 
-+    QueryResult premresult =
-+        LoginDatabase.PQuery ("SELECT 1 "
-+                                "FROM account_premium "
-+                                "WHERE id = '%u' "
-+                                "AND active = 1",
-+                                id);
-+    if (premresult) // if account premium
-+    {
-+        isPremium = true;
-+    }
-     // Check locked state for server
-     AccountTypes allowedAccountType = sWorld->GetPlayerSecurityLimit();
-     sLog->outDebug(LOG_FILTER_NETWORKIO, "Allowed Level: %u Player Level %u", allowedAccountType, AccountTypes(security));
-@@ -954,7 +965,7 @@ int WorldSocket::HandleAuthSession(WorldPacket& recvPacket)
-     LoginDatabase.Execute(stmt);
- 
-     // NOTE ATM the socket is single-threaded, have this in mind ...
--    ACE_NEW_RETURN (m_Session, WorldSession (id, this, AccountTypes(security), expansion, mutetime, locale, recruiter, isRecruiter), -1);
-+    ACE_NEW_RETURN (m_Session, WorldSession (id, this, AccountTypes(security), isPremium, expansion, mutetime, locale, recruiter, isRecruiter), -1);
- 
-     m_Crypt.Init(&k);
- 
 diff --git a/src/server/game/World/World.cpp b/src/server/game/World/World.cpp
-index ea74b6d..2e3747f 100755
+index d860530..1814bf4 100755
 --- a/src/server/game/World/World.cpp
 +++ b/src/server/game/World/World.cpp
 @@ -71,6 +71,7 @@
@@ -3933,19 +3625,7 @@ index ea74b6d..2e3747f 100755
  #include "CreatureTextMgr.h"
  #include "SmartAI.h"
  #include "Channel.h"
-@@ -458,8 +459,11 @@ void World::LoadConfigSettings(bool reload)
-     rate_values[RATE_DROP_ITEM_REFERENCED_AMOUNT] = ConfigMgr::GetFloatDefault("Rate.Drop.Item.ReferencedAmount", 1.0f);
-     rate_values[RATE_DROP_MONEY]  = ConfigMgr::GetFloatDefault("Rate.Drop.Money", 1.0f);
-     rate_values[RATE_XP_KILL]     = ConfigMgr::GetFloatDefault("Rate.XP.Kill", 1.0f);
-+    rate_values[RATE_XP_KILL_PREMIUM]    = ConfigMgr::GetFloatDefault("Rate.XP.Kill.Premium", 1.0f);
-     rate_values[RATE_XP_QUEST]    = ConfigMgr::GetFloatDefault("Rate.XP.Quest", 1.0f);
-+    rate_values[RATE_XP_QUEST_PREMIUM]   = ConfigMgr::GetFloatDefault("Rate.XP.Quest.Premium", 1.0f);
-     rate_values[RATE_XP_EXPLORE]  = ConfigMgr::GetFloatDefault("Rate.XP.Explore", 1.0f);
-+    rate_values[RATE_XP_EXPLORE_PREMIUM] = ConfigMgr::GetFloatDefault("Rate.XP.Explore.Premium", 1.0f);
-     rate_values[RATE_REPAIRCOST]  = ConfigMgr::GetFloatDefault("Rate.RepairCost", 1.0f);
-     if (rate_values[RATE_REPAIRCOST] < 0.0f)
-     {
-@@ -1761,6 +1765,9 @@ void World::SetInitialWorldSettings()
+@@ -1761,6 +1762,9 @@ void World::SetInitialWorldSettings()
  
      LoadCharacterNameData();
  
@@ -3955,7 +3635,7 @@ index ea74b6d..2e3747f 100755
      uint32 startupDuration = GetMSTimeDiffToNow(startupBegin);
  
      sLog->outInfo(LOG_FILTER_WORLDSERVER, "World initialized in %u minutes %u seconds", (startupDuration / 60000), ((startupDuration % 60000) / 1000));
-@@ -1917,6 +1924,7 @@ void World::Update(uint32 diff)
+@@ -1917,6 +1921,7 @@ void World::Update(uint32 diff)
      /// <ul><li> Handle auctions when the timer has passed
      if (m_timers[WUPDATE_AUCTIONS].Passed())
      {
@@ -3963,22 +3643,6 @@ index ea74b6d..2e3747f 100755
          m_timers[WUPDATE_AUCTIONS].Reset();
  
          ///- Update mails (return old mails with item, or delete them)
-diff --git a/src/server/game/World/World.h b/src/server/game/World/World.h
-index a6cdd47..a01254f 100755
---- a/src/server/game/World/World.h
-+++ b/src/server/game/World/World.h
-@@ -351,8 +351,11 @@ enum Rates
-     RATE_DROP_ITEM_REFERENCED_AMOUNT,
-     RATE_DROP_MONEY,
-     RATE_XP_KILL,
-+    RATE_XP_KILL_PREMIUM,
-     RATE_XP_QUEST,
-+    RATE_XP_QUEST_PREMIUM,
-     RATE_XP_EXPLORE,
-+    RATE_XP_EXPLORE_PREMIUM,
-     RATE_REPAIRCOST,
-     RATE_REPUTATION_GAIN,
-     RATE_REPUTATION_LOWLEVEL_KILL,
 diff --git a/src/server/scripts/CMakeLists.txt b/src/server/scripts/CMakeLists.txt
 index f148ae2..259dbee 100644
 --- a/src/server/scripts/CMakeLists.txt
@@ -3992,7 +3656,7 @@ index f148ae2..259dbee 100644
    ${CMAKE_SOURCE_DIR}/src/server/game/Battlefield/Zones
    ${CMAKE_SOURCE_DIR}/src/server/game/Battlegrounds
 diff --git a/src/server/scripts/Commands/CMakeLists.txt b/src/server/scripts/Commands/CMakeLists.txt
-index 177b3a4..aebb1b8 100644
+index d5ebeab..bd05f1b 100644
 --- a/src/server/scripts/Commands/CMakeLists.txt
 +++ b/src/server/scripts/Commands/CMakeLists.txt
 @@ -12,6 +12,7 @@ set(scripts_STAT_SRCS
@@ -4491,59 +4155,11 @@ index 0000000..3092cd3
 +{
 +    new ah_bot_commandscript();
 +}
-diff --git a/src/server/shared/Database/Implementation/LoginDatabase.cpp b/src/server/shared/Database/Implementation/LoginDatabase.cpp
-index 31d9f5e..a2586d8 100755
---- a/src/server/shared/Database/Implementation/LoginDatabase.cpp
-+++ b/src/server/shared/Database/Implementation/LoginDatabase.cpp
-@@ -25,6 +25,7 @@ void LoginDatabaseConnection::DoPrepareStatements()
-     PREPARE_STATEMENT(LOGIN_SEL_REALMLIST, "SELECT id, name, address, port, icon, flag, timezone, allowedSecurityLevel, population, gamebuild FROM realmlist WHERE flag <> 3 ORDER BY name", CONNECTION_SYNCH)
-     PREPARE_STATEMENT(LOGIN_DEL_EXPIRED_IP_BANS, "DELETE FROM ip_banned WHERE unbandate<>bandate AND unbandate<=UNIX_TIMESTAMP()", CONNECTION_ASYNC)
-     PREPARE_STATEMENT(LOGIN_UPD_EXPIRED_ACCOUNT_BANS, "UPDATE account_banned SET active = 0 WHERE active = 1 AND unbandate<>bandate AND unbandate<=UNIX_TIMESTAMP()", CONNECTION_ASYNC)
-+	PREPARE_STATEMENT(LOGIN_UPD_ACCOUNT_PREMIUM, "UPDATE account_premium SET active = 0 WHERE unsetdate<=UNIX_TIMESTAMP() AND unsetdate<>setdate", CONNECTION_ASYNC)
-     PREPARE_STATEMENT(LOGIN_SEL_IP_BANNED, "SELECT * FROM ip_banned WHERE ip = ?", CONNECTION_SYNCH)
-     PREPARE_STATEMENT(LOGIN_INS_IP_AUTO_BANNED, "INSERT INTO ip_banned VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+?, 'Trinity realmd', 'Failed login autoban')", CONNECTION_ASYNC)
-     PREPARE_STATEMENT(LOGIN_SEL_IP_BANNED_ALL, "SELECT ip, bandate, unbandate, bannedby, banreason FROM ip_banned WHERE (bandate = unbandate OR unbandate > UNIX_TIMESTAMP()) ORDER BY unbandate", CONNECTION_SYNCH);
-diff --git a/src/server/shared/Database/Implementation/LoginDatabase.h b/src/server/shared/Database/Implementation/LoginDatabase.h
-index 7c2a94e..0bfb640 100755
---- a/src/server/shared/Database/Implementation/LoginDatabase.h
-+++ b/src/server/shared/Database/Implementation/LoginDatabase.h
-@@ -102,6 +102,7 @@ enum LoginDatabaseStatements
-     LOGIN_SEL_ACCOUNT_INFO,
-     LOGIN_SEL_ACCOUNT_ACCESS_GMLEVEL_TEST,
-     LOGIN_SEL_ACCOUNT_ACCESS,
-+    LOGIN_UPD_ACCOUNT_PREMIUM,
-     LOGIN_SEL_ACCOUNT_RECRUITER,
-     LOGIN_SEL_BANS,
-     LOGIN_SEL_ACCOUNT_WHOIS,
 diff --git a/src/server/worldserver/worldserver.conf.dist b/src/server/worldserver/worldserver.conf.dist
-index 9eab3c4..f94df8c 100644
+index 7724f9a..002a9aa 100644
 --- a/src/server/worldserver/worldserver.conf.dist
 +++ b/src/server/worldserver/worldserver.conf.dist
-@@ -1826,14 +1826,20 @@ Rate.Drop.Item.ReferencedAmount = 1
- #    Rate.XP.Kill
- #    Rate.XP.Quest
- #    Rate.XP.Explore
-+#    Rate.XP.Kill.Premium
-+#    Rate.XP.Quest.Premium
-+#    Rate.XP.Explore.Premium
- #        Description: Experience rates.
- #        Default:     1 - (Rate.XP.Kill)
- #                     1 - (Rate.XP.Quest)
- #                     1 - (Rate.XP.Explore)
- 
--Rate.XP.Kill    = 1
--Rate.XP.Quest   = 1
--Rate.XP.Explore = 1
-+Rate.XP.Kill            = 1
-+Rate.XP.Kill.Premium    = 1
-+Rate.XP.Quest           = 1
-+Rate.XP.Quest.Premium   = 1
-+Rate.XP.Explore         = 1
-+Rate.XP.Explore.Premium = 1
- 
- #
- #    Rate.RepairCost
-@@ -2374,6 +2380,288 @@ Network.TcpNodelay = 1
+@@ -2374,6 +2374,271 @@ Network.TcpNodelay = 1
  #
  ###################################################################################################
  
@@ -4812,25 +4428,6 @@ index 9eab3c4..f94df8c 100644
 +AuctionHouseBot.DisableTGsBelowReqSkillRank = 0
 +AuctionHouseBot.DisableTGsAboveReqSkillRank = 0
 +
-+###############################################################################
-+# AUCTION HOUSE BOT GLYPHS PART
-+#
-+#    AuctionHouseBot.SellGlyphs
-+#    Default 0 (Off)
-+#
-+###############################################################################
-+
-+AuctionHouseBot.SellGlyphs = 0
-+AuctionHouseBot.GlyphsCount = 0
-+AuctionHouseBot.DisableGlyphBelowLevel = 0
-+AuctionHouseBot.DisableGlyphAboveLevel = 0
-+AuctionHouseBot.GlyphBuyOutPriceMin = 0
-+AuctionHouseBot.GlyphBuyOutPriceMax = 0
-+AuctionHouseBot.GlyphBidPriceMin = 0
-+AuctionHouseBot.GlyphBidPriceMax = 0
-+
  ###################################################################################################
  # CONSOLE AND REMOTE ACCESS
  #
--- 
-1.7.2.5
